@@ -39,8 +39,9 @@ namespace Weaver
 
         [SerializeField]
         private Stopwatch m_Timer;
+		private IAssemblyResolver _assemblyResolver;
 
-        public ComponentController componentController
+		public ComponentController componentController
         {
             get { return m_Components; }
         }
@@ -245,20 +246,59 @@ namespace Weaver
                 return;
             }
 
+
+            var unityProjectRoot = new DirectoryInfo(Application.dataPath).Parent.ToString();
+
+            var defineConstants = UnityEditor.PlayerSettings.
+                GetScriptingDefineSymbolsForGroup(EditorUserBuildSettings.selectedBuildTargetGroup)
+                .Split(new[] { ';' })
+                .ToList();
+
+            var typeCache = new Fody.TypeCache(ResolveAssembly);
+
+            var readerParams = GetReaderParameters();
+            _assemblyResolver = readerParams.AssemblyResolver;
+
             using (FileStream assemblyStream = new FileStream(assemblyPath, FileMode.Open, FileAccess.ReadWrite))
             {
-                using (ModuleDefinition moduleDefinition = ModuleDefinition.ReadModule(assemblyStream, GetReaderParameters()))
+                using (ModuleDefinition moduleDefinition = ModuleDefinition.ReadModule(assemblyStream, readerParams))
                 {
                     m_Components.Initialize(this);
 
                     m_Components.VisitModule(moduleDefinition, m_Log);
 
-                    // Save
-                    WriterParameters writerParameters = new WriterParameters()
-                    {
-                        WriteSymbols = true,
-                        SymbolWriterProvider = new Mono.Cecil.Pdb.NativePdbWriterProvider()
-                    };
+
+                    var weaverInstance = new ModuleWeaver();
+                    typeCache.BuildAssembliesToScan(weaverInstance);
+
+                    weaverInstance.ModuleDefinition = moduleDefinition;
+                    weaverInstance.AssemblyFilePath = assemblyPath;
+                    weaverInstance.AddinDirectoryPath = Path.GetDirectoryName(assemblyPath);    // not correct
+                    weaverInstance.References = "";
+                    weaverInstance.ReferenceCopyLocalPaths = new List<string>();
+                    weaverInstance.SolutionDirectoryPath = unityProjectRoot;
+                    weaverInstance.ProjectDirectoryPath = unityProjectRoot;
+                    weaverInstance.ProjectFilePath = "";
+                    weaverInstance.DocumentationFilePath = "";
+#pragma warning disable CS0618 // Type or member is obsolete
+                    weaverInstance.LogDebug = message => m_Log.Info("Fody Debug", message, true);
+                    weaverInstance.LogInfo = message => m_Log.Info("Fody Info", message, true);
+                    weaverInstance.LogMessage = (message, importance) => m_Log.Info("Fody Message", message + " " + (int)importance, false);
+                    weaverInstance.LogWarning = message => m_Log.Warning("Fody Warning", message, true);
+                    //weaverInstance.LogWarningPoint = LogWarningPoint;
+                    weaverInstance.LogError = message => m_Log.Error("Fody Error", message, true);
+                    //weaverInstance.LogErrorPoint = LogErrorPoint;
+                    weaverInstance.DefineConstants = defineConstants;
+                    weaverInstance.FindType = typeCache.FindType;
+                    weaverInstance.TryFindType = typeCache.TryFindType;
+#pragma warning restore CS0618 // Type or member is obsolete
+                    weaverInstance.ResolveAssembly = ResolveAssembly;
+
+
+                    weaverInstance.TypeSystem = new Fody.TypeSystem(typeCache.FindType, moduleDefinition);
+
+                    weaverInstance.Execute();
+
 
                     moduleDefinition.Write(GetWriterParameters());
                 }
@@ -279,6 +319,10 @@ namespace Weaver
             AssetDatabase.SaveAssets();
         }
 
+        private AssemblyDefinition ResolveAssembly(string name)
+        {
+            return _assemblyResolver.Resolve(new AssemblyNameReference(name, new System.Version()));
+        }
 
         [UsedImplicitly]
         private void OnValidate()

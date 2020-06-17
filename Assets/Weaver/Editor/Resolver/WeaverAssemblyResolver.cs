@@ -1,6 +1,7 @@
 ﻿using Mono.Cecil;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Reflection;
 
 namespace Weaver
@@ -45,8 +46,15 @@ namespace Weaver
 
             if (assemblyDef == null)
             {
-                assemblyDef = base.Resolve(name);
-                _cache[name.FullName] = assemblyDef;
+                try
+                {
+                    assemblyDef = base.Resolve(name);
+                    _cache[name.FullName] = assemblyDef;
+                }
+                catch(Exception e)
+				{
+                    UnityEngine.Debug.LogWarning(e);
+				}
             }
 
             return assemblyDef;
@@ -58,18 +66,25 @@ namespace Weaver
 
             if (assemblyDef == null)
             {
-                assemblyDef = base.Resolve(name, parameters);
-                _cache[name.FullName] = assemblyDef;
+                try
+                {
+                    assemblyDef = base.Resolve(name, parameters);
+                    _cache[name.FullName] = assemblyDef;
+                }
+                catch(Exception e)
+                {
+                    UnityEngine.Debug.LogWarning(e);
+                }
             }
 
             return assemblyDef;
         }
 
-        /// <summary>
-        /// Searches for AssemblyDefinition in our cache, and failing that,
-        /// looks for a known location.  Returns null if both attempts fail.
-        /// </summary>
-        private AssemblyDefinition FindAssemblyDefinition(string fullName, ReaderParameters parameters)
+		/// <summary>
+		/// Searches for AssemblyDefinition in our cache, and failing that,
+		/// looks for a known location.  Returns null if both attempts fail.
+		/// </summary>
+		private AssemblyDefinition FindAssemblyDefinition(string fullName, ReaderParameters parameters)
         {
             if (fullName == null)
             {
@@ -81,6 +96,19 @@ namespace Weaver
             // Look in cache first
             if (_cache.TryGetValue(fullName, out assemblyDefinition))
             {
+                return assemblyDefinition;
+            }
+
+            if(fullName.Contains("mscorlib,") || fullName.Contains("System.Core,"))
+			{
+                var path = typeof(object).Assembly.Location;
+                if (parameters != null)
+                    assemblyDefinition = AssemblyDefinition.ReadAssembly(path, parameters);
+                else
+                    assemblyDefinition = AssemblyDefinition.ReadAssembly(path);
+
+                _cache[fullName] = assemblyDefinition;
+
                 return assemblyDefinition;
             }
 

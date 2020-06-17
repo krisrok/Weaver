@@ -1,7 +1,8 @@
 {
     "name": "Weaver",
     "references": [
-        "GUID:b51dadc5ea53a604eaad6d735bda7cda"
+        "GUID:b51dadc5ea53a604eaad6d735bda7cda",
+        "GUID:8d1650a426c74d74fa8698c0e35f8b4a"
     ],
     "includePlatforms": [
         "Editor"
@@ -13,9 +14,11 @@
         "Mono.Cecil.dll",
         "Mono.Cecil.Pdb.dll",
         "Mono.Cecil.Mdb.dll",
-        "Mono.Cecil.Rocks.dll"
+        "Mono.Cecil.Rocks.dll",
+        "FodyHelpers.dll"
     ],
     "autoReferenced": false,
     "defineConstraints": [],
-    "versionDefines": []
+    "versionDefines": [],
+    "noEngineReferences": false
 }
